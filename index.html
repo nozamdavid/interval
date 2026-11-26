@@ -51,7 +51,8 @@
     <div class="activity" id="activity" hidden>
       <div class="activity-body">
         <p id="status" role="status"></p>
-        <progress id="progress" max="1" hidden></progress>
+        <progress id="progress" class="sr-only" max="1" aria-label="Progress" hidden></progress>
+        <div id="progress-track" class="progress-track" aria-hidden="true" hidden></div>
       </div>
       <button class="button primary" id="save" type="button" hidden>Save video</button>
       <button class="button secondary" id="cancel" type="button" hidden>Cancel export</button>

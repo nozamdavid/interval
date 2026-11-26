@@ -343,11 +343,19 @@
     void showCurrent();
   }
 
+  function updateProgress(value) {
+    const track = $('progress-track');
+    $('progress').value = value;
+    track.toggleAttribute('data-empty', value === 0);
+    track.style.setProperty('--progress', value);
+  }
+
   function showStatus(message, { progress, cancel = false, download = false, save = false } = {}) {
     $('activity').hidden = false;
     $('status').textContent = message;
     $('progress').hidden = progress === undefined;
-    if (progress !== undefined) $('progress').value = progress;
+    $('progress-track').hidden = progress === undefined;
+    if (progress !== undefined) updateProgress(progress);
     $('cancel').hidden = !cancel;
     $('save').hidden = !save;
     $('download').hidden = !download;
@@ -396,7 +404,7 @@
           results[index] = null;
         }
         processed++;
-        $('progress').value = processed / files.length;
+        updateProgress(processed / files.length);
         $('status').textContent = readingStatus();
       }
     };
