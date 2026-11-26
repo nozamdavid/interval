@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#151515">
+  <title>Interval · Timelapse editor</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="assets/media.js"></script>
+  <script defer src="editor.js"></script>
+</head>
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" class="symbols" aria-hidden="true">
+    <symbol id="i-logo" viewBox="0 0 24 24"><rect x="4.5" y="6" width="15" height="12" rx="2"/><path d="M9 6v12m6-12v12M4.5 12h4.5m6 0h4.5"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5.5" y="10" width="13" height="10.5" rx="2"/><path d="M8.5 10V7a3.5 3.5 0 0 1 7 0v3m-3.5 4v2.5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.5v11m-4-4 4 4 4-4M5 15.5v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6v12m6-12v12" stroke-width="3"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M7 6v12m10-12-8 6 8 6z"/></symbol>
+    <symbol id="i-forward" viewBox="0 0 24 24"><path d="M17 6v12M7 6l8 6-8 6z"/></symbol>
+    <symbol id="i-speed" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M10 2.5h4m-2 7v4l2 1"/></symbol>
+    <symbol id="i-crop" viewBox="0 0 24 24"><path d="M7 3v12a2 2 0 0 0 2 2h12M3 7h12a2 2 0 0 1 2 2v12"/></symbol>
+    <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M20 10a8 8 0 0 0-14-4L3 9m0-5v5h5m-4 5a8 8 0 0 0 14 4l3-3m-5 0h5v5"/></symbol>
+    <symbol id="i-quarter" viewBox="0 0 24 24"><rect x="4" y="10" width="10" height="10" rx="1.5"/><path d="M8 5a9 9 0 0 1 12 9m-3-2 3 3 2-3"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 6h16m-10-2h4M6 6l1 13a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 19l1-13m-8 4v6m4-6v6"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M4 17l5-4 3 3 4-5 4 4"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><span class="brand-mark"><svg class="icon"><use href="#i-logo"/></svg></span>Interval</div>
+      <div class="header-actions">
+        <span class="local"><svg class="icon"><use href="#i-lock"/></svg><span>Local processing</span></span>
+        <button class="button primary" id="export" type="button" disabled><svg class="icon"><use href="#i-download"/></svg>Export video</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="introduction">
+      <div>
+        <h1>Timelapse editor</h1>
+        <p>Drop a sequence of images to make a video in your browser.</p>
+      </div>
+      <button class="button secondary" id="import" type="button"><svg class="icon"><use href="#i-plus"/></svg>Import images</button>
+      <input type="file" id="files" accept="image/*,.heic,.heif" multiple hidden>
+    </div>
+
+    <div class="activity" id="activity" hidden>
+      <div class="activity-body">
+        <p id="status" role="status"></p>
+        <progress id="progress" max="1" hidden></progress>
+      </div>
+      <button class="button primary" id="save" type="button" hidden>Save video</button>
+      <button class="button secondary" id="cancel" type="button" hidden>Cancel export</button>
+      <a class="button secondary" id="download" hidden><svg class="icon"><use href="#i-download"/></svg>Download again</a>
+      <button class="text-button" id="dismiss" type="button" hidden>Dismiss</button>
+    </div>
+
+    <div class="workspace">
+      <div class="preview-column">
+        <section class="panel player" aria-labelledby="preview-heading">
+          <header class="panel-header">
+            <div class="panel-heading">
+              <h2 id="preview-heading">Preview</h2>
+              <span class="tag" id="demo-tag" hidden>Demo sequence</span>
+            </div>
+            <div class="preview-details">
+              <span class="metadata" id="resolution"></span>
+              <button class="button secondary crop-done" id="crop-done" type="button" hidden>Done</button>
+            </div>
+          </header>
+
+          <div class="stage" id="stage">
+            <div class="image-frame" id="image-frame" hidden>
+              <canvas id="preview" aria-label="Timelapse frame preview"></canvas>
+              <div class="crop-grid alignment-grid" aria-hidden="true"></div>
+              <div id="crop-box" class="crop-box" hidden>
+                <div class="crop-grid"></div>
+                <div class="crop-move" data-handle="move" tabindex="0" role="group" aria-label="Move crop. Use the arrow keys."></div>
+                <button class="crop-handle nw" type="button" data-handle="nw" aria-label="Resize crop from top left. Use the arrow keys."></button>
+                <button class="crop-handle ne" type="button" data-handle="ne" aria-label="Resize crop from top right. Use the arrow keys."></button>
+                <button class="crop-handle sw" type="button" data-handle="sw" aria-label="Resize crop from bottom left. Use the arrow keys."></button>
+                <button class="crop-handle se" type="button" data-handle="se" aria-label="Resize crop from bottom right. Use the arrow keys."></button>
+              </div>
+            </div>
+            <div class="empty" id="empty">
+              <span class="empty-icon"><svg class="icon"><use href="#i-image"/></svg></span>
+              <h3>Drop your images here</h3>
+              <p>Or import a set of photos to start editing.</p>
+              <button class="button secondary" id="show-demo" type="button">Try the demo</button>
+            </div>
+          </div>
+
+          <div class="transport">
+            <div class="transport-buttons">
+              <button class="icon-button" id="previous" type="button" aria-label="Previous image" title="Previous image"><svg class="icon"><use href="#i-back"/></svg></button>
+              <button class="icon-button play" id="play" type="button" aria-label="Play preview" title="Play preview"><svg class="icon"><use href="#i-play" id="play-icon"/></svg></button>
+              <button class="icon-button" id="next" type="button" aria-label="Next image" title="Next image"><svg class="icon"><use href="#i-forward"/></svg></button>
+            </div>
+            <label class="sr-only" for="scrubber">Preview position</label>
+            <input type="range" id="scrubber" class="scrubber" min="0" max="1" value="0">
+            <div class="time" id="time">0:00.0 <span>/</span> 0:00.0</div>
+          </div>
+        </section>
+
+        <section class="panel sequence" aria-labelledby="sequence-heading">
+          <header class="panel-header">
+            <div class="panel-heading"><h2 id="sequence-heading">Image sequence</h2><span class="count" id="image-count">0 images</span></div>
+            <div class="sequence-actions">
+              <span class="sequence-order" id="sequence-order">Sorted by filename</span>
+              <button class="icon-button clear-button" id="clear" type="button" aria-label="Clear sequence" title="Clear sequence"><svg class="icon"><use href="#i-trash"/></svg></button>
+            </div>
+          </header>
+          <div class="filmstrip" id="filmstrip" aria-label="Images in sequence"></div>
+        </section>
+      </div>
+
+      <aside class="panel inspector" aria-labelledby="settings-heading">
+        <header class="panel-header"><h2 id="settings-heading">Video settings</h2></header>
+        <fieldset id="settings" disabled aria-labelledby="settings-heading">
+          <section class="tool-section" aria-labelledby="timing-heading">
+            <h3 id="timing-heading"><svg class="icon"><use href="#i-speed"/></svg>Timing</h3>
+            <div class="field-row">
+              <label for="fps">Output framerate</label>
+              <div class="input-unit"><input id="fps" type="number" min="1" max="120" step="1" value="24" inputmode="numeric"><span>fps</span></div>
+            </div>
+            <div class="field-row">
+              <label for="repeats">Frames per image</label>
+              <div class="input-unit"><input id="repeats" type="number" min="1" max="300" step="1" value="3" inputmode="numeric"></div>
+            </div>
+            <div class="duration"><span>Estimated duration</span><output id="duration" for="fps repeats">0 s</output></div>
+          </section>
+
+          <section class="tool-section" aria-labelledby="crop-heading">
+            <div class="tool-heading">
+              <h3 id="crop-heading"><svg class="icon"><use href="#i-crop"/></svg>Crop</h3>
+              <button class="text-button" id="reset-crop" type="button">Reset</button>
+            </div>
+            <div class="field-row">
+              <label for="aspect">Aspect ratio</label>
+              <div class="select-wrap">
+                <select id="aspect">
+                  <option value="original">Original</option>
+                  <option value="16:9">16:9</option>
+                  <option value="9:16">9:16</option>
+                  <option value="1:1">1:1</option>
+                  <option value="4:3">4:3</option>
+                  <option value="custom">Custom</option>
+                </select>
+                <svg class="icon"><use href="#i-chevron"/></svg>
+              </div>
+            </div>
+            <button class="button secondary adjust" id="edit-crop" type="button" aria-pressed="false"><svg class="icon"><use href="#i-crop"/></svg><span>Adjust crop</span></button>
+          </section>
+
+          <section class="tool-section rotation-section" aria-labelledby="rotation-heading">
+            <div class="tool-heading">
+              <h3 id="rotation-heading"><svg class="icon"><use href="#i-rotate"/></svg>Rotation</h3>
+              <button class="text-button" id="reset-rotation" type="button">Reset</button>
+            </div>
+            <div class="field-row">
+              <label for="angle">Fine rotation</label>
+              <div class="input-unit angle-unit"><input id="angle" type="number" min="-45" max="45" step="0.1" value="0.0" inputmode="decimal"><span>°</span></div>
+            </div>
+            <div class="ruler">
+              <div class="ruler-labels" aria-hidden="true"><span>−45°</span><span>−30°</span><span>−15°</span><span>0°</span><span>15°</span><span>30°</span><span>45°</span></div>
+              <label class="sr-only" for="angle-scale">Fine rotation scale in degrees</label>
+              <input id="angle-scale" class="angle-scale" type="range" min="-45" max="45" step="0.1" value="0">
+            </div>
+            <button class="button secondary adjust" id="quarter-turn" type="button"><svg class="icon"><use href="#i-quarter"/></svg>Rotate 90°</button>
+          </section>
+        </fieldset>
+      </aside>
+    </div>
+    <footer><svg class="icon"><use href="#i-lock"/></svg>Your images and video stay on this device.</footer>
+  </main>
+
+  <div id="drop-overlay" class="drop-overlay" hidden aria-hidden="true"><div><svg class="icon"><use href="#i-image"/></svg><strong>Drop images to import</strong></div></div>
+</body>
+</html>
