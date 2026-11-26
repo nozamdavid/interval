@@ -21,6 +21,7 @@
   let demoImage;
   let playbackOffset = 0;
   let thumbnailButtons = [];
+  let encoderCheck;
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const percent = fraction => `${fraction * 100}%`;
@@ -119,6 +120,7 @@
   }
 
   function paintPreview() {
+    updateExportButton();
     if (!state.crop || !displayImage) return;
     const { width, height } = outputSize(state.crop);
     $('resolution').textContent = `${width} × ${height}`;
@@ -277,6 +279,33 @@
     strip.scrollLeft = selected ? Math.max(0, selected.offsetLeft - strip.offsetLeft - 12) : 0;
   }
 
+  function updateExportButton() {
+    const button = $('export');
+    if (state.importing || state.exportController || !state.crop) {
+      button.disabled = true;
+      return;
+    }
+    const size = outputSize(state.crop);
+    const fps = state.fps;
+    const key = `${size.width}x${size.height}@${fps}`;
+    // Resolve the file format ahead of the click so the picker can use that gesture.
+    if (encoderCheck?.key !== key) {
+      const check = { key, ready: false };
+      encoderCheck = check;
+      (async () => {
+        try {
+          check.encoder = await IntervalMedia.selectEncoder(size, fps);
+        } catch (error) {
+          check.error = error;
+        } finally {
+          check.ready = true;
+          if (encoderCheck === check) updateExportButton();
+        }
+      })();
+    }
+    button.disabled = !encoderCheck.ready;
+  }
+
   function updateControls() {
     const hasImages = state.images.length !== 0;
     const busy = state.importing || Boolean(state.exportController);
@@ -284,7 +313,7 @@
     $('show-demo').disabled = busy;
     $('settings').disabled = busy || !hasImages;
     $('clear').disabled = busy || !hasImages;
-    $('export').disabled = busy || !hasImages;
+    updateExportButton();
     $('crop-done').disabled = busy;
     $('crop-box').inert = busy;
     $('demo-tag').hidden = !state.demo;
@@ -350,16 +379,15 @@
     track.style.setProperty('--progress', value);
   }
 
-  function showStatus(message, { progress, cancel = false, download = false, save = false } = {}) {
+  function showStatus(message, { progress, cancel = false, download = false } = {}) {
     $('activity').hidden = false;
     $('status').textContent = message;
     $('progress').hidden = progress === undefined;
     $('progress-track').hidden = progress === undefined;
     if (progress !== undefined) updateProgress(progress);
     $('cancel').hidden = !cancel;
-    $('save').hidden = !save;
     $('download').hidden = !download;
-    $('dismiss').hidden = progress !== undefined || save;
+    $('dismiss').hidden = progress !== undefined;
   }
 
   function hideStatus() {
@@ -541,33 +569,6 @@
     paintPreview();
   }
 
-  function chooseSaveFile({ extension, mimeType }, signal) {
-    const button = $('save');
-    const format = extension.toUpperCase();
-    button.textContent = `Save ${format}`;
-    showStatus(`Choose where to save your ${format} video.`, { cancel: true, save: true });
-    button.focus();
-    return new Promise((resolve, reject) => {
-      function cancel() {
-        button.removeEventListener('click', save);
-        reject(signal.reason);
-      }
-      async function save() {
-        signal.removeEventListener('abort', cancel);
-        try {
-          resolve(await window.showSaveFilePicker({
-            suggestedName: `interval-timelapse.${extension}`,
-            types: [{ description: `${format} video`, accept: { [mimeType]: [`.${extension}`] } }],
-          }));
-        } catch (error) {
-          reject(error);
-        }
-      }
-      signal.addEventListener('abort', cancel, { once: true });
-      button.addEventListener('click', save, { once: true });
-    });
-  }
-
   async function temporaryExport(extension) {
     const root = await navigator.storage?.getDirectory?.();
     if (!root) throw new Error('This browser cannot save directly to disk. Open Interval in a browser with the File System Access API.');
@@ -586,7 +587,7 @@
   }
 
   async function exportVideo() {
-    if (!state.images.length || state.exportController || state.importing) return;
+    if ($('export').disabled) return;
     pause();
     updateTransport(playbackOffset);
     const controller = new AbortController();
@@ -601,12 +602,16 @@
     let temporary;
     let keepTemporary = false;
     try {
-      const encoder = await IntervalMedia.selectEncoder(outputCanvas, project.fps);
-      controller.signal.throwIfAborted();
+      const { encoder, error } = encoderCheck;
+      if (!encoder) throw error;
       let handle;
       if (typeof window.showSaveFilePicker === 'function') {
         try {
-          handle = await chooseSaveFile(encoder, controller.signal);
+          const { extension, mimeType } = encoder;
+          handle = await window.showSaveFilePicker({
+            suggestedName: `interval-timelapse.${extension}`,
+            types: [{ description: `${extension.toUpperCase()} video`, accept: { [mimeType]: [`.${extension}`] } }],
+          });
         } catch (error) {
           if (error.name !== 'SecurityError') throw error;
         }
@@ -692,6 +697,7 @@
       const input = event.target;
       if (!Number.isFinite(input.valueAsNumber)) return;
       state[key] = clamp(Math.round(input.valueAsNumber), Number(input.min), Number(input.max));
+      if (key === 'fps') updateExportButton();
       seek(state.index);
     });
     $(key).addEventListener('change', event => { event.target.value = state[key]; });
