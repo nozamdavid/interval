@@ -43,7 +43,7 @@ export async function encode({ canvas, fps, repeats, images, draw, signal, onPro
         const frame = index * repeats + repeat;
         await source.add(frame / fps, 1 / fps);
       }
-      onProgress((index + 1) / images.length);
+      onProgress(index + 1);
       // Let the browser paint progress and handle cancellation.
       await new Promise(resolve => setTimeout(resolve, 0));
     }

@@ -609,7 +609,11 @@
       }
       controller.signal.throwIfAborted();
       const format = encoder.extension.toUpperCase();
-      showStatus(`Saving ${format} to disk… 0%`, { progress: 0, cancel: true });
+      const total = project.images.length;
+      const reportProgress = processed => showStatus(`Saving ${format} to disk… (${processed}/${total})`, {
+        progress: processed / total, cancel: true,
+      });
+      reportProgress(0);
       destination = await handle.createWritable();
       await IntervalMedia.encode({
         ...encoder, destination,
@@ -620,11 +624,9 @@
           controller.signal.throwIfAborted();
           renderImage(outputContext, image, entry, project.crop, project);
         },
-        onProgress(fraction) {
-          showStatus(`Saving ${format} to disk… ${Math.floor(fraction * 100)}%`, { progress: fraction, cancel: true });
-        },
+        onProgress: reportProgress,
       });
-      showStatus(`Finishing ${format}…`, { progress: 1 });
+      showStatus(`Finishing ${format}… (${total}/${total})`, { progress: 1 });
       await destination.close();
       destination = null;
       if (temporary) {
