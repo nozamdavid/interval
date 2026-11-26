@@ -381,6 +381,7 @@
     const entries = [];
     const skipped = [];
     let processed = 0;
+    const readingStatus = () => `Reading images on this device… (${processed}/${files.length})`;
     let nextIndex = 0;
     const results = new Array(files.length);
     const cores = navigator.hardwareConcurrency || 4;
@@ -394,10 +395,12 @@
         } catch {
           results[index] = null;
         }
-        $('progress').value = ++processed / files.length;
+        processed++;
+        $('progress').value = processed / files.length;
+        $('status').textContent = readingStatus();
       }
     };
-    showStatus('Reading images on this device…', { progress: 0 });
+    showStatus(readingStatus(), { progress: 0 });
     try {
       await Promise.all(Array.from({ length: parallelism }, worker));
       results.forEach((entry, index) => {
