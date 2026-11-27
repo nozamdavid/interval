@@ -54,7 +54,7 @@ button, a, select, input, .crop-move { -webkit-tap-highlight-color: transparent;
 .secondary:hover:not(:disabled) { background: #303038; border-color: #51515d; }
 .button.secondary[aria-pressed="true"] { color: var(--accent); border-color: var(--accent-border); background: var(--accent-surface); }
 
-.home main { width: min(100% - 2rem, 44rem); }
+.home main { width: min(100% - 2rem, 60rem); }
 .landing { margin-block: clamp(2.5rem, 8vh, 5rem) 1.75rem; text-align: center; }
 .landing h1 { font-size: clamp(2.25rem, 6vw, 3.65rem); }
 .landing > p { margin-top: .65rem; color: var(--muted); }
@@ -77,7 +77,7 @@ button, a, select, input, .crop-move { -webkit-tap-highlight-color: transparent;
 .recent { margin-block: 2rem .5rem; }
 .recent h2 { margin-bottom: .75rem; font-size: 1rem; font-weight: 650; }
 .recent-projects {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(9rem, 100%), 1fr));
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, clamp(9rem, 20vw, 12rem)), 1fr));
   gap: .75rem; margin: 0; padding: 0; list-style: none;
 }
 .recent-project { position: relative; min-width: 0; }
