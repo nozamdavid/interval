@@ -863,6 +863,38 @@
     state.crop = { x: Math.max(0, height - y - croppedHeight), y: x, width: croppedHeight, height: width };
   }
 
+  function zoomCrop(event) {
+    if (!state.cropping || !displayImage || cropGesture || state.importing || state.exportController ||
+      event.ctrlKey || !event.deltaY) return;
+    const rect = $('image-frame').getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    event.preventDefault();
+
+    const frame = frameBounds();
+    const crop = state.crop;
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
+    const minEdge = Math.min(32, frame.width / 2, frame.height / 2);
+    const minimum = Math.min(1, minEdge / Math.min(crop.width, crop.height));
+    const maximum = Math.min(frame.width / crop.width, frame.height / crop.height);
+    const scale = clamp(Math.exp(clamp(event.deltaY * unit, -200, 200) * .002), minimum, maximum);
+    if (scale === 1) return;
+
+    const width = crop.width * scale;
+    const height = crop.height * scale;
+    const pointerX = (event.clientX - rect.left) * frame.width / rect.width;
+    const pointerY = (event.clientY - rect.top) * frame.height / rect.height;
+    const anchorX = clamp((pointerX - crop.x) / crop.width, 0, 1);
+    const anchorY = clamp((pointerY - crop.y) / crop.height, 0, 1);
+    state.crop = {
+      x: clamp(crop.x + (crop.width - width) * anchorX, 0, Math.max(0, frame.width - width)),
+      y: clamp(crop.y + (crop.height - height) * anchorY, 0, Math.max(0, frame.height - height)),
+      width, height,
+    };
+    if (state.aspect === 'original') state.aspect = 'custom';
+    syncCropTools();
+    paintPreview();
+  }
+
   function updateAngle(value, fromScale = false) {
     if (!Number.isFinite(value)) return;
     state.angle = Math.round(clamp(value, -45, 45) * 10) / 10;
@@ -1058,6 +1090,7 @@
       (event.clientY - cropGesture.y) * frame.height / rect.height);
   });
   $('crop-box').addEventListener('lostpointercapture', () => { cropGesture = null; });
+  $('stage').addEventListener('wheel', zoomCrop, { passive: false });
   $('crop-box').addEventListener('keydown', event => {
     const directions = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     const direction = directions[event.key];
