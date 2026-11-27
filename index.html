@@ -26,6 +26,7 @@
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 6h16m-10-2h4M6 6l1 13a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 19l1-13m-8 4v6m4-6v6"/></symbol>
     <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M4 17l5-4 3 3 4-5 4 4"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
   </svg>
 
   <header class="topbar">
@@ -67,8 +68,14 @@
       </div>
       <button class="button secondary" id="cancel" type="button" hidden>Cancel export</button>
       <a class="button secondary" id="download" hidden><svg class="icon"><use href="#i-download"/></svg>Download again</a>
+      <button class="button secondary" id="reconnect" type="button" hidden>Reselect images</button>
       <button class="text-button" id="dismiss" type="button" hidden>Dismiss</button>
     </div>
+
+    <section class="recent" id="recent" aria-labelledby="recent-heading" hidden>
+      <h2 id="recent-heading">Recent on this device</h2>
+      <ul class="recent-projects" id="recent-projects"></ul>
+    </section>
 
     <div class="workspace" id="workspace" hidden>
       <div class="preview-column">

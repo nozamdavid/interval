@@ -22,6 +22,12 @@
   let playbackOffset = 0;
   let thumbnailButtons = [];
   let encoderCheck;
+  let projectId;
+  let projectDatabase;
+  let recentRequest = 0;
+  let recentUrls = [];
+  let openingFiles = false;
+  let reconnecting;
 
   function onLanding() {
     return $('landing').hidden === false;
@@ -37,13 +43,237 @@
     $('landing').hidden = !home;
     for (const id of ['editor-intro', 'workspace', 'export']) $(id).hidden = home;
     if (focus) $(home ? 'landing-heading' : 'editor-heading').focus();
-    if (!home) paintPreview();
+    if (home) void refreshRecent();
+    else {
+      if (reconnecting) {
+        reconnecting = null;
+        hideStatus();
+      }
+      $('recent').hidden = true;
+      paintPreview();
+    }
   }
 
   function openEditor() {
     if (!onLanding()) return;
+    reconnecting = null;
+    hideStatus();
     history.pushState(null, '', '#editor');
     renderRoute(true);
+  }
+
+  async function projectStorage(mode, operation) {
+    projectDatabase ||= new Promise((resolve, reject) => {
+      const request = indexedDB.open('interval-projects', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('projects', { keyPath: 'id' });
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const database = await projectDatabase;
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction('projects', mode);
+      const request = operation(transaction.objectStore('projects'));
+      transaction.oncomplete = () => resolve(request.result);
+      transaction.onabort = () => reject(transaction.error || request.error);
+    });
+  }
+
+  async function rememberProject() {
+    const first = state.images[0];
+    const project = {
+      id: projectId ||= crypto.randomUUID(),
+      updatedAt: Date.now(),
+      thumbnail: first.thumbnail,
+      files: state.images.map(({ file, handle }) => ({
+        name: file.name, size: file.size, lastModified: file.lastModified, handle,
+      })),
+    };
+    try {
+      await projectStorage('readwrite', store => store.put(project));
+    } catch (error) {
+      if (error?.name !== 'DataCloneError') throw error;
+      // A browser may offer handles without supporting persistence for them.
+      for (const file of project.files) file.handle = null;
+      await projectStorage('readwrite', store => store.put(project));
+    }
+    if (onLanding()) void refreshRecent();
+  }
+
+  async function refreshRecent() {
+    const request = ++recentRequest;
+    let projects;
+    try {
+      projects = await projectStorage('readonly', store => store.getAll());
+    } catch {
+      return;
+    }
+    if (request !== recentRequest || !onLanding()) return;
+    recentUrls.forEach(url => URL.revokeObjectURL(url));
+    recentUrls = [];
+    const cards = projects.sort((a, b) => b.updatedAt - a.updatedAt).map(project => {
+      const name = project.files[0].name;
+      const card = document.createElement('li');
+      card.className = 'recent-project';
+      const open = document.createElement('button');
+      open.className = 'recent-open';
+      open.type = 'button';
+      open.title = name;
+      open.addEventListener('click', () => void openProject(project));
+      const preview = new Image();
+      preview.src = URL.createObjectURL(project.thumbnail);
+      recentUrls.push(preview.src);
+      preview.alt = '';
+      const title = document.createElement('span');
+      title.className = 'recent-name';
+      title.textContent = name;
+      const count = document.createElement('span');
+      count.className = 'recent-count';
+      count.textContent = `${project.files.length} ${project.files.length === 1 ? 'image' : 'images'}`;
+      open.append(preview, title, count);
+      const remove = document.createElement('button');
+      remove.className = 'icon-button recent-remove';
+      remove.type = 'button';
+      remove.setAttribute('aria-label', `Remove ${name} from recent projects`);
+      remove.title = 'Remove from recent projects';
+      remove.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>';
+      remove.addEventListener('click', async () => {
+        try {
+          await projectStorage('readwrite', store => store.delete(project.id));
+          if (reconnecting?.project.id === project.id) {
+            reconnecting = null;
+            hideStatus();
+          }
+          await refreshRecent();
+          ($('recent-projects').querySelector('.recent-open') || $('choose-images')).focus();
+        } catch {
+          showStatus('Could not remove this project from recent projects.');
+        }
+      });
+      card.append(open, remove);
+      return card;
+    });
+    $('recent-projects').replaceChildren(...cards);
+    $('recent').hidden = cards.length === 0;
+    updateRecentControls();
+  }
+
+  function updateRecentControls() {
+    const busy = openingFiles || state.importing || Boolean(state.exportController);
+    for (const button of $('recent-projects').querySelectorAll('button')) button.disabled = busy;
+  }
+
+  function fileKey({ name, size, lastModified }) {
+    return JSON.stringify([name, size, lastModified]);
+  }
+
+  function promptReconnect(invalidSelection = false) {
+    const { project, entries } = reconnecting;
+    const missing = project.files.length - entries.filter(Boolean).length;
+    const count = `${missing} original ${missing === 1 ? 'image' : 'images'}`;
+    const name = project.files[0].name;
+    const message = invalidSelection
+      ? `The selection did not match the missing files. Reselect ${count} for ${name}.`
+      : `Reselect ${count} to reopen ${name}.`;
+    showStatus(message, { reconnect: true });
+  }
+
+  async function openProject(project) {
+    if (openingFiles || state.importing || state.exportController) return;
+    if (project.id === projectId && state.images.length) {
+      openEditor();
+      return;
+    }
+    openingFiles = true;
+    reconnecting = null;
+    updateControls();
+    showStatus('Opening project…', { progress: 0 });
+    const firstHandle = project.files.find(file => file.handle)?.handle;
+    try {
+      if (await firstHandle?.queryPermission() === 'prompt') {
+        // Chromium can restore access to the site's previously selected files in one prompt.
+        await firstHandle.requestPermission();
+      }
+    } catch {
+      // A missing or revoked handle can still be reconnected through the picker.
+    }
+    const entries = await Promise.all(project.files.map(async ({ handle }) => {
+      try {
+        return handle ? { file: await handle.getFile(), handle } : null;
+      } catch {
+        return null;
+      }
+    }));
+    openingFiles = false;
+    updateControls();
+    if (!onLanding()) {
+      hideStatus();
+      return;
+    }
+    if (entries.every(Boolean)) {
+      await importFiles(entries, project.id);
+    } else {
+      reconnecting = { project, entries };
+      promptReconnect();
+      $('reconnect').focus();
+    }
+  }
+
+  function acceptSelection(entries, reconnect) {
+    if (!entries.length) return;
+    if (!reconnect) {
+      void importFiles(entries);
+      return;
+    }
+    if (reconnecting !== reconnect) return;
+    const candidates = new Map();
+    for (const entry of entries) {
+      const key = fileKey(entry.file);
+      if (!candidates.has(key)) candidates.set(key, []);
+      candidates.get(key).push(entry);
+    }
+    let matched = false;
+    reconnect.project.files.forEach((reference, index) => {
+      if (reconnect.entries[index]) return;
+      const match = candidates.get(fileKey(reference))?.pop();
+      if (!match) return;
+      reconnect.entries[index] = match;
+      matched = true;
+    });
+    if (reconnect.entries.every(Boolean)) void importFiles(reconnect.entries, reconnect.project.id);
+    else promptReconnect(!matched);
+  }
+
+  let inputReconnect;
+  async function chooseFiles(reconnect = null) {
+    if (openingFiles || state.importing || state.exportController) return;
+    if (typeof window.showOpenFilePicker === 'function') {
+      const wasOnLanding = onLanding();
+      openingFiles = true;
+      updateControls();
+      let entries;
+      try {
+        const handles = await window.showOpenFilePicker({
+          multiple: true,
+          types: [{ description: 'Images', accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.avif', '.gif', '.bmp', '.tif', '.tiff', '.heic', '.heif'] } }],
+        });
+        entries = await Promise.all(handles.map(async handle => ({ file: await handle.getFile(), handle })));
+      } catch (error) {
+        if (error.name !== 'SecurityError') {
+          if (error.name !== 'AbortError') showStatus('Could not open the selected images. Try choosing them again.', { reconnect: Boolean(reconnect) });
+          return;
+        }
+      } finally {
+        openingFiles = false;
+        updateControls();
+      }
+      if (wasOnLanding !== onLanding()) return;
+      if (entries) {
+        acceptSelection(entries, reconnect);
+        return;
+      }
+    }
+    inputReconnect = reconnect;
+    $('files').click();
   }
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -304,7 +534,7 @@
 
   function updateExportButton() {
     const button = $('export');
-    if (state.importing || state.exportController || !state.crop) {
+    if (openingFiles || state.importing || state.exportController || !state.crop) {
       button.disabled = true;
       return;
     }
@@ -331,9 +561,11 @@
 
   function updateControls() {
     const hasImages = state.images.length !== 0;
-    const busy = state.importing || Boolean(state.exportController);
+    const busy = openingFiles || state.importing || Boolean(state.exportController);
     $('import').disabled = busy;
     $('choose-images').disabled = busy;
+    $('reconnect').disabled = busy;
+    updateRecentControls();
     $('show-demo').disabled = busy;
     $('settings').disabled = busy || !hasImages;
     $('clear').disabled = busy || !hasImages;
@@ -403,7 +635,7 @@
     track.style.setProperty('--progress', value);
   }
 
-  function showStatus(message, { progress, cancel = false, download = false } = {}) {
+  function showStatus(message, { progress, cancel = false, download = false, reconnect = false } = {}) {
     $('activity').hidden = false;
     $('status').textContent = message;
     $('progress').hidden = progress === undefined;
@@ -411,6 +643,7 @@
     if (progress !== undefined) updateProgress(progress);
     $('cancel').hidden = !cancel;
     $('download').hidden = !download;
+    $('reconnect').hidden = !reconnect;
     $('dismiss').hidden = progress !== undefined;
   }
 
@@ -418,13 +651,13 @@
     $('activity').hidden = true;
   }
 
-  async function prepareImage(file) {
+  async function prepareImage({ file, handle }) {
     const bitmap = await globalThis.createImageBitmap?.(file).catch(() => null);
     const image = bitmap || await decodeFile(file);
     try {
       const [preview, thumb] = await Promise.all([imageVariant(image, 1280), imageVariant(image, 196)]);
       return {
-        file, name: file.name, width: image.width, height: image.height,
+        file, handle: await handle, thumbnail: thumb, name: file.name, width: image.width, height: image.height,
         previewUrl: URL.createObjectURL(preview), thumbUrl: URL.createObjectURL(thumb),
       };
     } finally {
@@ -432,9 +665,10 @@
     }
   }
 
-  async function importFiles(files) {
-    if (!files.length || state.importing || state.exportController) return;
+  async function importFiles(files, restoredId) {
+    if (!files.length || openingFiles || state.importing || state.exportController) return;
     if (onLanding()) {
+      projectId = restoredId;
       replaceSequence([], false);
       openEditor();
     }
@@ -469,8 +703,17 @@
       await Promise.all(Array.from({ length: parallelism }, worker));
       results.forEach((entry, index) => {
         if (entry) entries.push(entry);
-        else skipped.push(files[index].name);
+        else skipped.push(files[index].file.name);
       });
+      if (restoredId && skipped.length) {
+        for (const entry of entries) {
+          URL.revokeObjectURL(entry.previewUrl);
+          URL.revokeObjectURL(entry.thumbUrl);
+        }
+        projectId = null;
+        showStatus('Could not decode all the original images. The recent project is still available.');
+        return;
+      }
       if (entries.length && (state.demo || !state.images.length)) {
         replaceSequence(entries.sort((a, b) => filenameOrder.compare(a.name, b.name)), false);
       } else if (entries.length) {
@@ -488,6 +731,13 @@
       } else {
         hideStatus();
       }
+      if (entries.length) {
+        try {
+          await rememberProject();
+        } catch {
+          showStatus('Images are available in the editor. This browser could not save the project to recents.');
+        }
+      }
     } finally {
       state.importing = false;
       updateControls();
@@ -495,7 +745,7 @@
   }
 
   async function showDemo() {
-    if (state.importing || state.exportController) return;
+    if (openingFiles || state.importing || state.exportController) return;
     openEditor();
     state.importing = true;
     updateControls();
@@ -516,6 +766,7 @@
         entries.push(entry);
       }
       hideStatus();
+      projectId = null;
       replaceSequence(entries, true);
     } catch {
       for (const entry of entries) URL.revokeObjectURL(entry.thumbUrl);
@@ -705,14 +956,20 @@
     if (!onLanding()) history.back();
   });
   window.addEventListener('popstate', () => renderRoute(true));
-  for (const id of ['import', 'choose-images']) $(id).addEventListener('click', () => $('files').click());
+  for (const id of ['import', 'choose-images']) $(id).addEventListener('click', () => void chooseFiles());
+  $('reconnect').addEventListener('click', () => void chooseFiles(reconnecting));
   $('files').addEventListener('change', event => {
-    const files = Array.from(event.currentTarget.files);
+    const files = Array.from(event.currentTarget.files, file => ({ file, handle: null }));
     event.currentTarget.value = '';
-    void importFiles(files);
+    acceptSelection(files, inputReconnect);
+    inputReconnect = null;
   });
   $('show-demo').addEventListener('click', showDemo);
-  $('clear').addEventListener('click', () => { hideStatus(); replaceSequence([], false); });
+  $('clear').addEventListener('click', () => {
+    projectId = null;
+    hideStatus();
+    replaceSequence([], false);
+  });
   $('previous').addEventListener('click', () => seek(state.index - 1));
   $('next').addEventListener('click', () => seek(state.index + 1));
   $('play').addEventListener('click', play);
@@ -795,19 +1052,22 @@
   });
   $('export').addEventListener('click', exportVideo);
   $('cancel').addEventListener('click', () => state.exportController?.abort());
-  $('dismiss').addEventListener('click', hideStatus);
+  $('dismiss').addEventListener('click', () => {
+    reconnecting = null;
+    hideStatus();
+  });
   document.addEventListener('dragenter', event => {
     if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
     dragCount++;
-    if (state.importing || state.exportController) return;
+    if (openingFiles || state.importing || state.exportController) return;
     if (onLanding()) $('landing-drop').setAttribute('data-dragging', '');
     else $('drop-overlay').hidden = false;
   });
   document.addEventListener('dragover', event => {
     if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
-    event.dataTransfer.dropEffect = state.importing || state.exportController ? 'none' : 'copy';
+    event.dataTransfer.dropEffect = openingFiles || state.importing || state.exportController ? 'none' : 'copy';
   });
   document.addEventListener('dragleave', event => {
     if (!event.dataTransfer.types.includes('Files')) return;
@@ -823,7 +1083,15 @@
     dragCount = 0;
     $('drop-overlay').hidden = true;
     $('landing-drop').removeAttribute('data-dragging');
-    void importFiles(Array.from(event.dataTransfer.files));
+    if (openingFiles || state.importing || state.exportController) return;
+    // Capture handles during the drop event, before the browser clears the drag data.
+    const entries = Array.from(event.dataTransfer.items).flatMap(item => {
+      const file = item.kind === 'file' && item.getAsFile();
+      if (!file) return [];
+      const handle = item.getAsFileSystemHandle?.().then(handle => handle?.kind === 'file' ? handle : null, () => null);
+      return [{ file, handle }];
+    });
+    void importFiles(entries.length ? entries : Array.from(event.dataTransfer.files, file => ({ file, handle: null })));
   });
   new ResizeObserver(paintPreview).observe($('stage'));
   if (location.hash === '#editor') history.replaceState(null, '', location.pathname + location.search);

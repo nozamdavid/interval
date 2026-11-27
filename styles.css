@@ -35,8 +35,7 @@ button, a, select, input, .crop-move { -webkit-tap-highlight-color: transparent;
 .topbar-inner, main { width: min(100% - 5rem, 86rem); margin-inline: auto; }
 .topbar-inner { min-height: 4.375rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .brand, .header-actions, .local, .button { display: inline-flex; align-items: center; }
-.brand { gap: .65rem; font-size: 1.2rem; font-weight: 730; letter-spacing: -.035em; }
-.brand { color: var(--text); text-decoration: none; border-radius: .6rem; }
+.brand { gap: .65rem; font-size: 1.2rem; font-weight: 730; letter-spacing: -.035em; color: var(--text); text-decoration: none; border-radius: .6rem; }
 .brand-mark { width: 2.1rem; height: 2.1rem; display: grid; place-items: center; border-radius: .6rem; color: var(--accent-ink); background: var(--accent); }
 .brand-mark .icon { width: 1.5rem; height: 1.5rem; stroke-width: 1.7; }
 .header-actions { gap: 1.25rem; }
@@ -71,6 +70,28 @@ button, a, select, input, .crop-move { -webkit-tap-highlight-color: transparent;
   border-radius: .7rem; background: #2c263c; color: var(--accent);
 }
 .landing-icon .icon { width: 1.5rem; height: 1.5rem; }
+
+.recent { margin-block: 2rem .5rem; }
+.recent h2 { margin-bottom: .75rem; font-size: 1rem; font-weight: 650; }
+.recent-projects {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(9rem, 100%), 1fr));
+  gap: .75rem; margin: 0; padding: 0; list-style: none;
+}
+.recent-project { position: relative; min-width: 0; }
+.recent-open {
+  display: grid; gap: .4rem; width: 100%; padding: .4rem; text-align: left;
+  border: 1px solid var(--border); border-radius: .8rem; background: var(--panel);
+}
+.recent-open:hover:not(:disabled) { border-color: #8272a0; background: var(--control); }
+.recent-open img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: .45rem; background: var(--stage); }
+.recent-name, .recent-count { padding-inline: .2rem; }
+.recent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .875rem; font-weight: 630; }
+.recent-count { margin-top: -.2rem; color: var(--muted); font-size: .75rem; }
+.recent-project .recent-remove {
+  position: absolute; inset: .65rem .65rem auto auto; width: 2rem; height: 2rem;
+  border: 1px solid #ffffff36; background: #1a1921; color: var(--text);
+}
+.recent-project .recent-remove:hover:not(:disabled) { background: #3b344c; }
 
 .introduction { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-block: 2rem 1.55rem; }
 h1 { font-size: 2.15rem; font-weight: 720; line-height: 1.14; letter-spacing: -.038em; }
