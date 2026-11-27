@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "esbuild src/media.js --bundle --format=iife --global-name=IntervalMedia --loader:.webp=dataurl --minify --legal-comments=linked --outfile=assets/media.js"
+    "build": "esbuild src/media.js --bundle --format=iife --global-name=IntervalMedia --minify --legal-comments=linked --outfile=assets/media.js"
   },
   "dependencies": {
     "mediabunny": "1.66.5"

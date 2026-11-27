@@ -18,7 +18,7 @@
   let cropGesture;
   let downloadUrl;
   let dragCount = 0;
-  let demoImage;
+  let timingBeforeDemo;
   let playbackOffset = 0;
   let thumbnailButtons = [];
   let encoderCheck;
@@ -314,7 +314,6 @@
           Math.abs(y * cos - x * sin) * 2 / orientedHeight);
       }
     }
-    if (entry.demoPosition !== undefined) scale *= 1 + entry.demoPosition * .19;
     const width = sourceWidth * scale;
     const height = sourceHeight * scale;
 
@@ -364,8 +363,7 @@
   }
 
   function previewSource(entry) {
-    if (entry.demoPosition !== undefined) return Promise.resolve(demoImage);
-    const pending = previewCache.get(entry) || loadImage(entry.previewUrl);
+    const pending = previewCache.get(entry) || loadImage(entry.previewUrl || entry.sourceUrl);
     previewCache.delete(entry);
     previewCache.set(entry, pending);
     if (previewCache.size > 6) previewCache.delete(previewCache.keys().next().value);
@@ -616,6 +614,15 @@
   function replaceSequence(images, demo) {
     pause();
     releaseImages();
+    if (demo && !state.demo) {
+      timingBeforeDemo = { fps: state.fps, repeats: state.repeats };
+      Object.assign(state, { fps: 24, repeats: 1 });
+    } else if (!demo && state.demo) {
+      Object.assign(state, timingBeforeDemo);
+      timingBeforeDemo = null;
+    }
+    $('fps').value = state.fps;
+    $('repeats').value = state.repeats;
     state.images = images;
     state.demo = demo;
     state.index = 0;
@@ -665,6 +672,32 @@
     }
   }
 
+  async function prepareSequence(length, prepare, label) {
+    let processed = 0;
+    const readingStatus = () => `${label}… (${processed}/${length})`;
+    let nextIndex = 0;
+    const results = new Array(length);
+    const cores = navigator.hardwareConcurrency || 4;
+    const memoryLimit = navigator.deviceMemory >= 8 ? 4 : 2;
+    const parallelism = Math.min(length, memoryLimit, Math.max(2, Math.floor(cores / 2)));
+    const worker = async () => {
+      while (nextIndex < length) {
+        const index = nextIndex++;
+        try {
+          results[index] = await prepare(index);
+        } catch {
+          results[index] = null;
+        }
+        processed++;
+        updateProgress(processed / length);
+        $('status').textContent = readingStatus();
+      }
+    };
+    showStatus(readingStatus(), { progress: 0 });
+    await Promise.all(Array.from({ length: parallelism }, worker));
+    return results;
+  }
+
   async function importFiles(files, restoredId) {
     if (!files.length || openingFiles || state.importing || state.exportController) return;
     if (onLanding()) {
@@ -678,29 +711,8 @@
     updateTransport();
     const entries = [];
     const skipped = [];
-    let processed = 0;
-    const readingStatus = () => `Reading images on this device… (${processed}/${files.length})`;
-    let nextIndex = 0;
-    const results = new Array(files.length);
-    const cores = navigator.hardwareConcurrency || 4;
-    const memoryLimit = navigator.deviceMemory >= 8 ? 4 : 2;
-    const parallelism = Math.min(files.length, memoryLimit, Math.max(2, Math.floor(cores / 2)));
-    const worker = async () => {
-      while (nextIndex < files.length) {
-        const index = nextIndex++;
-        try {
-          results[index] = await prepareImage(files[index]);
-        } catch {
-          results[index] = null;
-        }
-        processed++;
-        updateProgress(processed / files.length);
-        $('status').textContent = readingStatus();
-      }
-    };
-    showStatus(readingStatus(), { progress: 0 });
     try {
-      await Promise.all(Array.from({ length: parallelism }, worker));
+      const results = await prepareSequence(files.length, index => prepareImage(files[index]), 'Reading images on this device');
       results.forEach((entry, index) => {
         if (entry) entries.push(entry);
         else skipped.push(files[index].file.name);
@@ -748,28 +760,38 @@
     if (openingFiles || state.importing || state.exportController) return;
     openEditor();
     state.importing = true;
+    pause();
     updateControls();
-    const entries = [];
+    updateTransport();
     try {
-      demoImage ||= await loadImage(IntervalMedia.demoUrl);
-      const reference = { width: demoImage.width, height: demoImage.height };
-      const project = { reference, turns: 0, angle: 0 };
-      project.crop = frameBounds(project);
-      const thumbnail = document.createElement('canvas');
-      thumbnail.width = 196;
-      thumbnail.height = Math.round(thumbnail.width * reference.height / reference.width);
-      const context = thumbnail.getContext('2d', { alpha: false });
-      for (let index = 0; index < 24; index++) {
-        const entry = { ...reference, demoPosition: index / 23, name: `Demo image ${index + 1}` };
-        renderImage(context, demoImage, entry, project.crop, project);
-        entry.thumbUrl = URL.createObjectURL(await imageBlob(thumbnail));
-        entries.push(entry);
+      if (!window.IntervalDemoFrames) {
+        showStatus('Loading demo images…', { progress: 0 });
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'assets/demo-frames.js';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.append(script);
+        });
+      }
+      const frames = window.IntervalDemoFrames;
+      const entries = await prepareSequence(frames.length, async index => {
+        const sourceUrl = frames[index];
+        const image = await loadImage(sourceUrl);
+        const thumbnail = await imageVariant(image, 196);
+        return {
+          name: `Demo image ${index + 1}`, sourceUrl, width: image.width, height: image.height,
+          thumbUrl: URL.createObjectURL(thumbnail),
+        };
+      }, 'Loading demo images');
+      if (entries.includes(null)) {
+        for (const entry of entries) if (entry) URL.revokeObjectURL(entry.thumbUrl);
+        throw new Error('A demo frame could not be decoded.');
       }
       hideStatus();
       projectId = null;
       replaceSequence(entries, true);
     } catch {
-      for (const entry of entries) URL.revokeObjectURL(entry.thumbUrl);
       showStatus('Could not load the demo. Import your images to start editing.');
     } finally {
       state.importing = false;
@@ -913,7 +935,7 @@
         canvas: outputCanvas, images: project.images, fps: project.fps, repeats: project.repeats,
         signal: controller.signal,
         async draw(entry) {
-          const image = entry.file ? await decodeFile(entry.file) : demoImage;
+          const image = entry.file ? await decodeFile(entry.file) : await loadImage(entry.sourceUrl);
           controller.signal.throwIfAborted();
           renderImage(outputContext, image, entry, project.crop, project);
         },

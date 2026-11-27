@@ -2,10 +2,6 @@ import {
   CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH,
   StreamTarget, WebMOutputFormat, canEncodeVideo,
 } from 'mediabunny';
-import demoUrl from '../assets/alpine-dawn.webp';
-
-export { demoUrl };
-
 export async function selectEncoder({ width, height }, fps) {
   const candidates = [
     { codec: 'avc', extension: 'mp4', mimeType: 'video/mp4' },
