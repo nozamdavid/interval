@@ -23,6 +23,29 @@
   let thumbnailButtons = [];
   let encoderCheck;
 
+  function onLanding() {
+    return $('landing').hidden === false;
+  }
+
+  function renderRoute(focus = false) {
+    const home = location.hash !== '#editor';
+    if (home) {
+      pause();
+      updateTransport(playbackOffset);
+    }
+    document.body.classList.toggle('home', home);
+    $('landing').hidden = !home;
+    for (const id of ['editor-intro', 'workspace', 'export']) $(id).hidden = home;
+    if (focus) $(home ? 'landing-heading' : 'editor-heading').focus();
+    if (!home) paintPreview();
+  }
+
+  function openEditor() {
+    if (!onLanding()) return;
+    history.pushState(null, '', '#editor');
+    renderRoute(true);
+  }
+
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const percent = fraction => `${fraction * 100}%`;
 
@@ -310,6 +333,7 @@
     const hasImages = state.images.length !== 0;
     const busy = state.importing || Boolean(state.exportController);
     $('import').disabled = busy;
+    $('choose-images').disabled = busy;
     $('show-demo').disabled = busy;
     $('settings').disabled = busy || !hasImages;
     $('clear').disabled = busy || !hasImages;
@@ -410,6 +434,10 @@
 
   async function importFiles(files) {
     if (!files.length || state.importing || state.exportController) return;
+    if (onLanding()) {
+      replaceSequence([], false);
+      openEditor();
+    }
     state.importing = true;
     pause();
     updateControls();
@@ -468,6 +496,7 @@
 
   async function showDemo() {
     if (state.importing || state.exportController) return;
+    openEditor();
     state.importing = true;
     updateControls();
     const entries = [];
@@ -670,7 +699,13 @@
     }
   }
 
-  $('import').addEventListener('click', () => $('files').click());
+  $('home-link').addEventListener('click', event => {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (!onLanding()) history.back();
+  });
+  window.addEventListener('popstate', () => renderRoute(true));
+  for (const id of ['import', 'choose-images']) $(id).addEventListener('click', () => $('files').click());
   $('files').addEventListener('change', event => {
     const files = Array.from(event.currentTarget.files);
     event.currentTarget.value = '';
@@ -765,7 +800,9 @@
     if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
     dragCount++;
-    if (!state.importing && !state.exportController) $('drop-overlay').hidden = false;
+    if (state.importing || state.exportController) return;
+    if (onLanding()) $('landing-drop').setAttribute('data-dragging', '');
+    else $('drop-overlay').hidden = false;
   });
   document.addEventListener('dragover', event => {
     if (!event.dataTransfer.types.includes('Files')) return;
@@ -775,17 +812,22 @@
   document.addEventListener('dragleave', event => {
     if (!event.dataTransfer.types.includes('Files')) return;
     dragCount = Math.max(0, dragCount - 1);
-    if (!dragCount) $('drop-overlay').hidden = true;
+    if (!dragCount) {
+      $('drop-overlay').hidden = true;
+      $('landing-drop').removeAttribute('data-dragging');
+    }
   });
   document.addEventListener('drop', event => {
     if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
     dragCount = 0;
     $('drop-overlay').hidden = true;
+    $('landing-drop').removeAttribute('data-dragging');
     void importFiles(Array.from(event.dataTransfer.files));
   });
   new ResizeObserver(paintPreview).observe($('stage'));
+  if (location.hash === '#editor') history.replaceState(null, '', location.pathname + location.search);
+  renderRoute();
   updateControls();
   updateTransport();
-  void showDemo();
 })();

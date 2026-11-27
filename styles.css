@@ -36,6 +36,7 @@ button, a, select, input, .crop-move { -webkit-tap-highlight-color: transparent;
 .topbar-inner { min-height: 4.375rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .brand, .header-actions, .local, .button { display: inline-flex; align-items: center; }
 .brand { gap: .65rem; font-size: 1.2rem; font-weight: 730; letter-spacing: -.035em; }
+.brand { color: var(--text); text-decoration: none; border-radius: .6rem; }
 .brand-mark { width: 2.1rem; height: 2.1rem; display: grid; place-items: center; border-radius: .6rem; color: var(--accent-ink); background: var(--accent); }
 .brand-mark .icon { width: 1.5rem; height: 1.5rem; stroke-width: 1.7; }
 .header-actions { gap: 1.25rem; }
@@ -51,6 +52,25 @@ button, a, select, input, .crop-move { -webkit-tap-highlight-color: transparent;
 .secondary { border-color: var(--border); background: var(--control); color: var(--text); }
 .secondary:hover:not(:disabled) { background: #303038; border-color: #51515d; }
 .button[aria-pressed="true"] { color: var(--accent); border-color: #75689c; background: #302944; }
+
+.home main { width: min(100% - 2rem, 44rem); }
+.landing { margin-block: clamp(2.5rem, 8vh, 5rem) 1.75rem; text-align: center; }
+.landing h1 { font-size: clamp(2.25rem, 6vw, 3.65rem); }
+.landing > p { margin-top: .65rem; color: var(--muted); }
+.landing-drop {
+  display: grid; justify-items: center; align-content: center; gap: .85rem;
+  min-height: clamp(13rem, 32vh, 17rem); margin-block: 1.85rem .9rem; padding: 1.5rem;
+  border: 1px dashed #6e6580; border-radius: .9rem; background: var(--panel);
+  transition: background-color .16s, border-color .16s;
+}
+.landing-drop[data-dragging] { border-color: var(--accent); background: #2d263d; }
+.landing-drop h2 { font-size: 1.125rem; font-weight: 650; }
+.landing-drop .button { margin-top: .2rem; }
+.landing-icon {
+  width: 3rem; height: 3rem; display: grid; place-items: center;
+  border-radius: .7rem; background: #2c263c; color: var(--accent);
+}
+.landing-icon .icon { width: 1.5rem; height: 1.5rem; }
 
 .introduction { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-block: 2rem 1.55rem; }
 h1 { font-size: 2.15rem; font-weight: 720; line-height: 1.14; letter-spacing: -.038em; }
