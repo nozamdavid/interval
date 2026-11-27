@@ -12,7 +12,6 @@
 <body class="home">
   <svg xmlns="http://www.w3.org/2000/svg" class="symbols" aria-hidden="true">
     <symbol id="i-logo" viewBox="0 0 24 24"><rect x="4.5" y="6" width="15" height="12" rx="2"/><path d="M9 6v12m6-12v12M4.5 12h4.5m6 0h4.5"/></symbol>
-    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5.5" y="10" width="13" height="10.5" rx="2"/><path d="M8.5 10V7a3.5 3.5 0 0 1 7 0v3m-3.5 4v2.5"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.5v11m-4-4 4 4 4-4M5 15.5v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7z" fill="currentColor" stroke="none"/></symbol>
@@ -33,7 +32,6 @@
     <div class="topbar-inner">
       <a class="brand" id="home-link" href="./" aria-label="Interval home"><span class="brand-mark"><svg class="icon"><use href="#i-logo"/></svg></span>Interval</a>
       <div class="header-actions">
-        <span class="local"><svg class="icon"><use href="#i-lock"/></svg><span>Local processing</span></span>
         <button class="button primary" id="export" type="button" hidden disabled><svg class="icon"><use href="#i-download"/></svg>Export video</button>
       </div>
     </div>
@@ -42,13 +40,10 @@
   <main>
     <section class="landing" id="landing" aria-labelledby="landing-heading">
       <h1 id="landing-heading" tabindex="-1">Make a timelapse</h1>
-      <p>Turn a sequence of photos into a video.</p>
+      <p>Turn a sequence of photos into a video. 100% offline</p>
       <div class="landing-drop" id="landing-drop">
         <span class="landing-icon"><svg class="icon" aria-hidden="true"><use href="#i-image"/></svg></span>
-        <div>
-          <h2>Drop your images here</h2>
-          <p class="landing-privacy"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Your images and video stay on this device.</p>
-        </div>
+        <h2>Drop your images here</h2>
         <button class="button primary" id="choose-images" type="button">Choose images</button>
       </div>
       <button class="text-button" id="show-demo" type="button">Try the demo</button>
